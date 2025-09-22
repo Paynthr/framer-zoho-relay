@@ -43,11 +43,33 @@ export default async function handler(req, res) {
     //   return;
     // }
     
+    // Format data for GoHighLevel via Zoho Flow
+    // GHL typically expects specific field names and structure
+    const ghlFormattedData = {
+      // Map form fields to GHL expected fields
+      email: formData.email || formData.Email || formData.emailAddress,
+      phone: formData.phone || formData.Phone || formData.phoneNumber,
+      firstName: formData.firstName || formData.first_name || formData.name?.split(' ')[0] || formData.name,
+      lastName: formData.lastName || formData.last_name || formData.name?.split(' ').slice(1).join(' ') || '',
+      // Include any additional fields
+      ...formData
+    };
+    
+    // Remove undefined values
+    Object.keys(ghlFormattedData).forEach(key => {
+      if (ghlFormattedData[key] === undefined || ghlFormattedData[key] === null) {
+        delete ghlFormattedData[key];
+      }
+    });
+    
+    console.log('Original form data:', formData);
+    console.log('GHL formatted data:', ghlFormattedData);
+    
     // Forward data to Zoho Flow
-    const ZOHO_WEBHOOK_URL = process.env.ZOHO_WEBHOOK_URL || 'https://flow.zoho.com/877328331/flow/webhook/incoming?zapikey=1001.7e0a4963f969a1624006486b22b52b94.bb22e981098f7fdd58328512d934a9d5&isdebug=false';
+    const ZOHO_WEBHOOK_URL = process.env.ZOHO_WEBHOOK_URL || 'https://flow.zoho.com/877328331/flow/webhook/incoming?zapikey=1001.7e0a4963f969a1624006486b22b52b94.bb22e981098f7fdd58328512d934a9d5&isdebug=true';
     
     console.log('Sending to Zoho Flow:', ZOHO_WEBHOOK_URL);
-    console.log('Payload:', JSON.stringify(formData, null, 2));
+    console.log('Payload:', JSON.stringify(ghlFormattedData, null, 2));
     
     const zohoResponse = await fetch(ZOHO_WEBHOOK_URL, {
       method: 'POST',
@@ -55,7 +77,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify(formData)
+      body: JSON.stringify(ghlFormattedData)
     });
     
     console.log('Zoho Flow response status:', zohoResponse.status);
