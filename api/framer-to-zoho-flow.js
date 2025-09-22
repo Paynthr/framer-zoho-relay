@@ -1,98 +1,97 @@
-// /api/framer-to-zoho-flow.js
+// api/framer-to-zoho-flow.js
 export default async function handler(req, res) {
-  // -------- CORS (safe and simple) --------
-  const allowList = (process.env.CORS_ORIGIN || "").split(",").map(s => s.trim()).filter(Boolean);
-  const origin = req.headers.origin || "";
-  const isAllowed = !allowList.length
-    ? true
-    : !!origin && allowList.some(pattern => {
-        const o = origin.replace(/^https?:\/\//, "").toLowerCase();
-        const h = pattern.replace(/^https?:\/\//, "").toLowerCase();
-        if (h.startsWith("*.")) {
-          const suf = h.slice(2);
-          return o === suf || o.endsWith("." + suf);
-        }
-        return o === h;
-      });
-
-  res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Origin", isAllowed ? (origin || "*") : "null");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    res.status(204).end();
+  // Set CORS headers to allow requests from Framer
+  const allowedOrigins = [
+    'https://framer.com',
+    'https://framer.website',
+    'https://framerusercontent.com'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.some(allowed => origin && origin.endsWith(allowed))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Fallback for testing
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Framer-Signature, Framer-Webhook-Submission-Id');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
     return;
   }
-  if (req.method !== "POST") {
-    res.status(405).json({ ok: false, error: "Method not allowed" });
+  
+  // Only allow POST requests for actual webhook data
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
     return;
   }
-
+  
   try {
-    // -------- Read body (JSON or x-www-form-urlencoded) --------
-    let body = req.body;
-    if (!body || typeof body !== "object") {
-      const chunks = [];
-      for await (const c of req) chunks.push(c);
-      const raw = Buffer.concat(chunks).toString("utf8") || "";
-      body = raw.trim().startsWith("{")
-        ? JSON.parse(raw)
-        : Object.fromEntries(new URLSearchParams(raw));
-    }
-
-    // -------- Normalize fields --------
-    const pick = (obj, ...keys) =>
-      keys.map(k => obj?.[k]).find(v => v != null && String(v).trim() !== "") ?? "";
-
-    const rawFullName = pick(body, "full_name", "name", "Name", "fullName");
-    const rawFirst = pick(body, "firstName", "first_name", "FirstName", "First");
-    const rawLast  = pick(body, "lastName",  "last_name",  "LastName",  "Last");
-    const email    = pick(body, "email", "Email", "eMail");
-    const phone    = pick(body, "phone", "Phone", "phoneNumber", "PhoneNumber");
-
-    // Derive first/last
-    let firstName = String(rawFirst || "").trim();
-    let lastName  = String(rawLast  || "").trim();
-
-    if ((!firstName || !lastName) && rawFullName) {
-      const parts = String(rawFullName).trim().split(/\s+/);
-      if (!firstName) firstName = parts[0] || "";
-      if (!lastName)  lastName  = parts.slice(1).join(" ") || "";
-    }
-    if (!firstName && email) firstName = email.split("@")[0]; // reasonable fallback
-    if (!lastName) lastName = "";
-
-    // Canonical payload Zoho Flow can rely on
-    const out = {
-      ...body,                // keep original fields for reference
-      name: rawFullName || `${firstName} ${lastName}`.trim(),
-      full_name: rawFullName || `${firstName} ${lastName}`.trim(),
-      firstName,
-      lastName,
-      email,
-      phone
-    };
-
-    // -------- Forward to Zoho Flow --------
-    const zflow = process.env.ZFLOW_URL;
-    if (!zflow) {
-      res.status(500).json({ ok: false, error: "ZFLOW_URL not set" });
-      return;
-    }
-
-    // Optional: log once during testing
-    // console.log("Forwarding to Zoho Flow:", out);
-
-    const r = await fetch(zflow, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(out),
+    // Get the form data from Framer
+    const formData = req.body;
+    
+    // Log the incoming data for debugging
+    console.log('Received form data:', formData);
+    
+    // Optional: Verify the webhook signature if you've set up a secret
+    // const signature = req.headers['framer-signature'];
+    // const submissionId = req.headers['framer-webhook-submission-id'];
+    // if (!verifySignature(formData, signature, submissionId)) {
+    //   res.status(401).json({ error: 'Invalid signature' });
+    //   return;
+    // }
+    
+    // Forward data to Zoho Flow
+    const zohoResponse = await fetch('https://framer-zoho-relay.vercel.app/api/framer-to-zoho-flow', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(formData)
     });
-
-    const text = await r.text(); // keeps your Vercel logs readable
-    res.status(200).json({ ok: true, zohoStatus: r.status, zohoText: text });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: "Relay failed", detail: String(err?.message || err) });
+    
+    if (!zohoResponse.ok) {
+      throw new Error(`Zoho Flow request failed: ${zohoResponse.status}`);
+    }
+    
+    const zohoData = await zohoResponse.json();
+    console.log('Zoho Flow response:', zohoData);
+    
+    // Return success response to Framer
+    res.status(200).json({ 
+      success: true, 
+      message: 'Data successfully sent to Zoho Flow',
+      zohoResponse: zohoData 
+    });
+    
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ 
+      error: 'Failed to process webhook', 
+      details: error.message 
+    });
   }
+}
+
+// Optional: Function to verify Framer webhook signature
+function verifySignature(payload, signature, submissionId) {
+  if (!signature || !submissionId) return false;
+  
+  const crypto = require('crypto');
+  const WEBHOOK_SECRET = process.env.FRAMER_WEBHOOK_SECRET; // Set this in your environment variables
+  
+  if (!WEBHOOK_SECRET) return true; // Skip verification if no secret is set
+  
+  if (signature.length !== 71 || !signature.startsWith('sha256=')) {
+    return false;
+  }
+  
+  const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
+  hmac.update(JSON.stringify(payload));
+  hmac.update(submissionId);
+  const expectedSignature = 'sha256=' + hmac.digest('hex');
+  
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 }
