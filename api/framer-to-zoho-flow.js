@@ -44,20 +44,55 @@ export default async function handler(req, res) {
     // }
     
     // Forward data to Zoho Flow
-    const zohoResponse = await fetch('https://framer-zoho-relay.vercel.app/api/framer-to-zoho-flow', {
+    const ZOHO_WEBHOOK_URL = process.env.ZOHO_WEBHOOK_URL || 'https://flow.zoho.com/877328331/flow/webhook/incoming?zapikey=1001.7e0a4963f969a1624006486b22b52b94.bb22e981098f7fdd58328512d934a9d5&isdebug=false';
+    
+    console.log('Sending to Zoho Flow:', ZOHO_WEBHOOK_URL);
+    console.log('Payload:', JSON.stringify(formData, null, 2));
+    
+    const zohoResponse = await fetch(ZOHO_WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify(formData)
     });
     
-    if (!zohoResponse.ok) {
-      throw new Error(`Zoho Flow request failed: ${zohoResponse.status}`);
+    console.log('Zoho Flow response status:', zohoResponse.status);
+    console.log('Zoho Flow response headers:', Object.fromEntries(zohoResponse.headers.entries()));
+    
+    let zohoData;
+    try {
+      const responseText = await zohoResponse.text();
+      console.log('Zoho Flow raw response:', responseText);
+      
+      // Try to parse as JSON if possible
+      try {
+        zohoData = JSON.parse(responseText);
+      } catch (parseError) {
+        zohoData = { rawResponse: responseText };
+      }
+    } catch (readError) {
+      console.error('Error reading Zoho response:', readError);
+      zohoData = { error: 'Could not read response' };
     }
     
-    const zohoData = await zohoResponse.json();
-    console.log('Zoho Flow response:', zohoData);
+    if (!zohoResponse.ok) {
+      console.error('Zoho Flow request failed:', {
+        status: zohoResponse.status,
+        statusText: zohoResponse.statusText,
+        response: zohoData
+      });
+      
+      // Still return success to Framer, but log the Zoho error
+      res.status(200).json({ 
+        success: true, 
+        message: 'Data received but Zoho Flow encountered an issue',
+        zohoStatus: zohoResponse.status,
+        zohoError: zohoData
+      });
+      return;
+    }
     
     // Return success response to Framer
     res.status(200).json({ 
