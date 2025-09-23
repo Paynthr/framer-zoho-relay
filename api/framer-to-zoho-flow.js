@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     const ghlFormattedData = {
       // Map form fields to GHL expected fields
       email: formData.email || formData.Email || formData.emailAddress,
-      phone: formData.phone || formData.Phone || formData.phoneNumber,
+      phone: formData.phone || formData.Phone || formData.phoneNumber || '+0000000000', // Default phone if not provided
       firstName: formData.firstName || formData.first_name || formData.name?.split(' ')[0] || formData.name,
       lastName: formData.lastName || formData.last_name || formData.name?.split(' ').slice(1).join(' ') || '',
       // Add tags for lead source tracking
