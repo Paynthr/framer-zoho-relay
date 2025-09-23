@@ -51,6 +51,9 @@ export default async function handler(req, res) {
       phone: formData.phone || formData.Phone || formData.phoneNumber,
       firstName: formData.firstName || formData.first_name || formData.name?.split(' ')[0] || formData.name,
       lastName: formData.lastName || formData.last_name || formData.name?.split(' ').slice(1).join(' ') || '',
+      // Add tags for lead source tracking
+      tags: formData.tags || ['Framer Form', 'Website Lead'],
+      source: formData.source || 'Framer Website Form',
       // Include any additional fields
       ...formData
     };
