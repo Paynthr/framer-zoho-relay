@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     console.log('GHL formatted data:', ghlFormattedData);
     
     // Send directly to GoHighLevel webhook (bypassing Zoho Flow)
-    const GHL_WEBHOOK_URL = process.env.GHL_WEBHOOK_URL || 'https://services.leadconnectorhq.com/hooks/CPlf6z9YYauZOvxCT2t/webhook-trigger/4e0fb34b-5495-460b-87c7-046578b';
+    const GHL_WEBHOOK_URL = process.env.GHL_WEBHOOK_URL || 'https://services.leadconnectorhq.com/hooks/CPlf6z9YYauZOvxCT2t/webhook-trigger/20bc36ad-1a8f-4a9d-a445-6f77998a';
     
     console.log('Sending directly to GoHighLevel:', GHL_WEBHOOK_URL);
     console.log('Payload:', JSON.stringify(ghlFormattedData, null, 2));
