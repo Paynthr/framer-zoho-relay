@@ -65,62 +65,61 @@ export default async function handler(req, res) {
     console.log('Original form data:', formData);
     console.log('GHL formatted data:', ghlFormattedData);
     
-    // Forward data to Zoho Flow
-    const ZOHO_WEBHOOK_URL = process.env.ZOHO_WEBHOOK_URL || 'https://flow.zoho.com/877328331/flow/webhook/incoming?zapikey=1001.7e0a4963f969a1624006486b22b52b94.bb22e981098f7fdd58328512d934a9d5&isdebug=true';
+    // Send directly to GoHighLevel webhook (bypassing Zoho Flow)
+    const GHL_WEBHOOK_URL = process.env.GHL_WEBHOOK_URL || 'https://services.leadconnectorhq.com/hooks/CPlf6z9YYauZOvxCT2t/webhook-trigger/4e0fb34b-5495-460b-87c7-046578b';
     
-    console.log('Sending to Zoho Flow:', ZOHO_WEBHOOK_URL);
+    console.log('Sending directly to GoHighLevel:', GHL_WEBHOOK_URL);
     console.log('Payload:', JSON.stringify(ghlFormattedData, null, 2));
     
-    const zohoResponse = await fetch(ZOHO_WEBHOOK_URL, {
+    const ghlResponse = await fetch(GHL_WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
       },
       body: JSON.stringify(ghlFormattedData)
     });
     
-    console.log('Zoho Flow response status:', zohoResponse.status);
-    console.log('Zoho Flow response headers:', Object.fromEntries(zohoResponse.headers.entries()));
+    console.log('GHL response status:', ghlResponse.status);
     
-    let zohoData;
+    let ghlData;
     try {
-      const responseText = await zohoResponse.text();
-      console.log('Zoho Flow raw response:', responseText);
+      const responseText = await ghlResponse.text();
+      console.log('GHL raw response:', responseText);
       
-      // Try to parse as JSON if possible
       try {
-        zohoData = JSON.parse(responseText);
+        ghlData = JSON.parse(responseText);
       } catch (parseError) {
-        zohoData = { rawResponse: responseText };
+        ghlData = { rawResponse: responseText };
       }
     } catch (readError) {
-      console.error('Error reading Zoho response:', readError);
-      zohoData = { error: 'Could not read response' };
+      console.error('Error reading GHL response:', readError);
+      ghlData = { error: 'Could not read response' };
     }
     
-    if (!zohoResponse.ok) {
-      console.error('Zoho Flow request failed:', {
-        status: zohoResponse.status,
-        statusText: zohoResponse.statusText,
-        response: zohoData
+    if (!ghlResponse.ok) {
+      console.error('GHL request failed:', {
+        status: ghlResponse.status,
+        statusText: ghlResponse.statusText,
+        response: ghlData
       });
       
-      // Still return success to Framer, but log the Zoho error
+      // Still return success to Framer, but log the GHL error
       res.status(200).json({ 
         success: true, 
-        message: 'Data received but Zoho Flow encountered an issue',
-        zohoStatus: zohoResponse.status,
-        zohoError: zohoData
+        message: 'Data received but GHL encountered an issue',
+        ghlStatus: ghlResponse.status,
+        ghlError: ghlData
       });
       return;
     }
     
+    console.log('GHL response:', ghlData);
+    
     // Return success response to Framer
     res.status(200).json({ 
       success: true, 
-      message: 'Data successfully sent to Zoho Flow',
-      zohoResponse: zohoData 
+      message: 'Data successfully sent to GoHighLevel',
+      ghlResponse: ghlData 
     });
     
   } catch (error) {
